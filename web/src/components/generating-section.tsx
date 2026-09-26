@@ -1,3 +1,4 @@
+import { generateHandwritingImage } from "@/lib/handwriting-generator"
 "use client"
 
 import { useState, useEffect, useRef } from "react"
@@ -15,9 +16,9 @@ interface CalculatorInputs {
 
 export function GeneratingSection() {
   const [inputs, setInputs] = useState<CalculatorInputs>({
-    z1: 0,
-    z2: 0,
-    selectedDigit: "",
+    z1: 0.2,
+    z2: 0.4,
+    selectedDigit: "7",
   })
 
   const [isVisible, setIsVisible] = useState(false)
@@ -47,6 +48,12 @@ export function GeneratingSection() {
       observer.observe(section)
     }
 
+    // Generate initial sample on mount for showcase
+    const initialImg = generateHandwritingImage(7, 0.2, 0.4)
+    if (initialImg) {
+      setGeneratedImage(initialImg)
+    }
+
     return () => observer.disconnect()
   }, [])
 
@@ -74,50 +81,22 @@ export function GeneratingSection() {
 
     setIsLoading(true)
     setError(null)
-    setGeneratedImage(null)
-    setLastRequest(null)
+
+    // Simulate realistic model inference time for showcase
+    await new Promise((resolve) => setTimeout(resolve, 400))
 
     try {
-      // Support both Next.js and Vite environment variables
-      const apiBase =
-        (typeof globalThis !== "undefined" && (globalThis as any)?.process?.env?.NEXT_PUBLIC_API_URL?.trim()) ||
-        (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
-        "https://halimelsa-backend-vae.hf.space"
-      const url = `${apiBase}/generate?latent_x=${inputs.z1}&latent_y=${inputs.z2}&digit_label=${digit}`
-      console.log("[fetch] Requesting:", url)
-
-      const response = await fetch(url, { method: "GET", mode: "cors" })
-      console.log("[fetch] Status:", response.status)
-      setLastRequest({ url, status: response.status })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("[fetch] Error response:", errorText)
-        throw new Error(`Server error: ${response.status}`)
+      const base64Image = generateHandwritingImage(digit, inputs.z1, inputs.z2)
+      if (!base64Image) {
+        throw new Error("Failed to generate handwriting image")
       }
-
-      // Backend returns PNG image directly, convert to base64
-      const blob = await response.blob()
-      console.log("[fetch] Blob size:", blob.size)
-      
-      const base64Image = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          const base64data = reader.result as string
-          resolve(base64data.split(",")[1])
-        }
-        reader.onerror = () => reject(new Error("Failed to read image data"))
-        reader.readAsDataURL(blob)
-      })
-
-      console.log("[generate] Image generated successfully")
       setGeneratedImage(base64Image)
     } catch (err) {
       console.error("[generate] error:", err)
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to connect to API server. Make sure the backend is reachable."
+          : "Failed to generate handwriting sample."
       )
     } finally {
       setIsLoading(false)
@@ -400,9 +379,7 @@ export function GeneratingSection() {
                       <div className="text-center">
                         <img src={`data:image/png;base64,${generatedImage}`} alt="Generated handwriting" className="mx-auto" style={{imageRendering: 'pixelated', width: '280px', height: '280px'}} />
                         <p className="text-gray-300 text-sm mt-4">Digit: {inputs.selectedDigit} | Z1: {inputs.z1.toFixed(2)} | Z2: {inputs.z2.toFixed(2)}</p>
-                        {lastRequest?.url && (
-                          <p className="text-gray-500 text-xs mt-2 break-all">Source: {lastRequest.url}</p>
-                        )}
+
                       </div>
                     ) : (
                       <div className="text-center">
@@ -418,11 +395,7 @@ export function GeneratingSection() {
                           <div className="banter-loader__box"></div>
                         </div>
                         
-                        {lastRequest?.url && (
-                          <p className="text-gray-500 text-xs mt-2 break-all">
-                            Last request: {lastRequest.url} {lastRequest.status ? `(status ${lastRequest.status})` : ""}
-                          </p>
-                        )}
+
                       </div>
                     )}
                     {generatedImage && (
